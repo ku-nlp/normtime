@@ -1,15 +1,17 @@
-# Japanese Temporal Expression Normalizer
+# Japanese Temporal Expression Normalizer 
 
-## Requirements
+## Requirements  
  - python 3 >= 3.6 
 
-## Example
-Evaluation 
+## Example 
+Evaluation  
+
 ```
 $ python3  tools/evaluate.py -x  /loquat/sakaguchi/BCCWJ-TimeBank/2016_saka/BCCWJ-TIMEX/xmldata  
 ```
 
-Testing
+Testing 
+
 ```
 $ cat test.txt
 来月出張する
