@@ -280,8 +280,13 @@
 {"pattern":"元治", "process_type":1863},
 {"pattern":"慶応", "process_type":1864},
 {"pattern":"明治", "process_type":1867},
+{"pattern":"M", "process_type":1867},
 {"pattern":"大正", "process_type":1911},
+{"pattern":"T", "process_type":1911},
 {"pattern":"昭和", "process_type":1925},
+{"pattern":"S", "process_type":1925},
 {"pattern":"平成", "process_type":1988},
-{"pattern":"令和", "process_type":2018}
+{"pattern":"H", "process_type":1988},
+{"pattern":"令和", "process_type":2018},
+{"pattern":"R", "process_type":2018}
 ]
