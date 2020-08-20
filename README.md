@@ -11,8 +11,9 @@
 ## Usage 
 
 ```Python
-from normtime import normalize
-print(normalize('来年4/26', TYPE='DATE', dct='2013-06-01'))
+>>> from normtime import normalize
+>>> print(normalize('来年4/26', TYPE='DATE', dct='2013-06-01'))
+2014-04-26
 ```
 
 ### Predicting using file
