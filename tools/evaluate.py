@@ -3,15 +3,11 @@ import sys
 import argparse
 import random
 from datetime import datetime
-from collections import namedtuple, defaultdict
+from collections import defaultdict
 HERE = os.path.dirname(os.path.realpath(__file__))
 sys.path.append(f'{HERE}/..')
-from normtime import NormTime
+from normtime import NormTime, TIMEX
 from timebank import read_input
-
-XML_DIR = f'{HERE}/../data/5.0/xmldata'
-TIMEX = namedtuple('TIMEX', ('str', 'begin_strid', 'end_strid', 'TYPE'))
-
 
 def evaluate(xml_dir, debug):
     timebank_docs = []

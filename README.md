@@ -1,19 +1,28 @@
 # Japanese Temporal Expression Normalizer 
 
 ## Requirements  
- - python 3 >= 3.6 
+ - python >= 3.6 
 
-## Example 
-Evaluation  
-
+## Install 
 ```
-$ python3  tools/evaluate.py -x  /loquat/sakaguchi/BCCWJ-TimeBank/2016_saka/BCCWJ-TIMEX/xmldata  
+% python setup.py install 
 ```
 
-Testing 
+## Usage 
+
+```Python
+from normtime import normalize
+print(normalize('来年4/26', TYPE='DATE', dct='2013-06-01'))
+```
+
+### Predicting using file
+
+Note that the delimiter is tab.  
+--dct represents document creation day.  
+When --dct is ommited, today is regarded as dct.
 
 ```
-$ cat test.txt
+% cat test.txt
 来月出張する
 	0	2	DATE
 
@@ -27,7 +36,7 @@ $ cat test.txt
 	0	3	TIME
 	7	11	TIME
 
-$ python3 tools/evaluate.py -t test.txt --dct 2019-06-24
+% python3 tools/evaluate.py -t test.txt --dct 2019-06-24
 来月	XXXX-XX	2019-07
 明日	XXXX-XX-XX	2019-06-25
 100日後	Q+100D	2019-10-03
@@ -35,5 +44,9 @@ $ python3 tools/evaluate.py -t test.txt --dct 2019-06-24
 5時間後	Q+5H	2019-06-24T25
 ```
 
---dct represents document creation day.  
-When --dct is ommited, today is regarded as dct.
+
+### Evaluation by BCCWJ-TimeBank 
+
+```
+% python3  tools/evaluate.py -x  /loquat/sakaguchi/BCCWJ-TimeBank/2016_saka/BCCWJ-TIMEX/xmldata  
+```
