@@ -23,9 +23,9 @@
 	{"pattern": "(#+)月(#+)", "datetypelist": [{"timeclass":"MONTH", "num":1}, {"timeclass":"DAY", "num":2}], "type":"DATE", "poslimit":"TAIL"},
 	{"pattern": "(##?#?)", "datetypelist": [{"timeclass":"NUM", "num":1}]},
 
-	{"pattern": "(#+)[／・．](#+)[／・．](#+)", "datetypelist": [{"timeclass":"YEAR", "num":1}, {"timeclass":"MONTH", "num":2}, {"timeclass":"DAY", "num":3}], "type":"DATE"},
-	{"pattern": "(####)[／・．](##?)", "datetypelist": [{"timeclass":"YEAR", "num":1}, {"timeclass":"MONTH", "num":2}], "type":"DATE"},
-	{"pattern": "(#+)[／](#+)", "datetypelist": [{"timeclass":"MONTH", "num":1}, {"timeclass":"DAY", "num":2}], "type":"DATE"},
+	{"pattern": "(#+)[／/・．.](#+)[／/・．.](#+)", "datetypelist": [{"timeclass":"YEAR", "num":1}, {"timeclass":"MONTH", "num":2}, {"timeclass":"DAY", "num":3}], "type":"DATE"},
+	{"pattern": "(####)[／/・．.](##?)", "datetypelist": [{"timeclass":"YEAR", "num":1}, {"timeclass":"MONTH", "num":2}], "type":"DATE"},
+	{"pattern": "(#+)[／/.](#+)", "datetypelist": [{"timeclass":"MONTH", "num":1}, {"timeclass":"DAY", "num":2}], "type":"DATE"},
 	{"pattern": "(#+)[・](#+)", "datetypelist": [{"timeclass":"HOUR", "num":1}, {"timeclass":"MINUTE", "num":2}], "type":"DATE"},
 	{"pattern": "（同(#+)）年", "datetypelist": [{"timeclass":"YEAR", "num":1}], "type":"DATE"},
 	{"pattern": "（(#+)）", "datetypelist": [{"timeclass":"YEAR", "num":1, "rangelimit":"1:-1"}], "type":"DURATION"},
