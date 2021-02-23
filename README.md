@@ -1,7 +1,7 @@
 # Japanese Temporal Expression Normalizer 
 
 ## Requirements  
- - python >= 3.6 
+ - python >= 3.7 
 
 ## Install 
 ```
@@ -23,7 +23,7 @@ Note that the delimiter is tab.
 When --dct is ommited, today is regarded as dct.
 
 ```
-% cat test.txt
+% cat sample.txt
 来月出張する
 	0	2	DATE
 
@@ -37,7 +37,7 @@ When --dct is ommited, today is regarded as dct.
 	0	3	TIME
 	7	11	TIME
 
-% python3 tools/evaluate.py -t test.txt --dct 2019-06-24
+% python3 tools/evaluate.py -t sample.txt --dct 2019-06-24
 来月	XXXX-XX	2019-07
 明日	XXXX-XX-XX	2019-06-25
 100日後	Q+100D	2019-10-03
