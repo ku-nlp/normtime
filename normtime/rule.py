@@ -1,17 +1,23 @@
 import os
-import sys
 import json
 import re
-import copy
-from collections import namedtuple, defaultdict
-from .time_composition import TimeCompositionManager
+from dataclasses import dataclass
+from collections import defaultdict
+from .time_composition import TimeComposition, TimeData
 from .num_ex import str2num
- 
-HERE = os.path.dirname( os.path.abspath( __file__ ) )
+from .const import TimeClass, TimexType, RefType
+
+HERE = os.path.dirname(os.path.abspath(__file__))
 RULE_FILE = f'{HERE}/../rule/strRule.json'
 GENGO_FILE = f'{HERE}/../rule/gengo.json'
 
-Match = namedtuple('Match', ('begin_strid', 'end_strid', 'rule_id', 'obj'))
+@dataclass
+class RuleMatch:
+    begin_strid: int
+    end_strid: int
+    rule_id: int
+    matchobj: str
+
 
 class ApplyRule(object):
     def __init__(self, debug=False):
@@ -24,26 +30,34 @@ class ApplyRule(object):
                 repattern = re.compile(pattern)
                 strRuleList[i][u"repattern"] = repattern
             self.rules.extend(strRuleList)
-        self.rule_len = len(self.rules)
 
         with open(GENGO_FILE) as f:
             self.gengo_dicts = json.load(f)
 
 
-    def __matching_rule(self, masked_sent, timexes):
+    def matching_rule(self, masked_sent, timexes):
+        """ Rule matching to the given timexes.
+
+        Args:
+            masked_sent (str)
+            timexes (List(TIMEX))
+
+        Returns:
+            List[List[RuleMatch]]
+        """
         def arrange_span(span, rule):
             for datetypedict in rule['datetypelist']:
                 if "rangelimit" in datetypedict:
                     rangelimit = datetypedict["rangelimit"]
                     if rangelimit[-1] == ':': # :で終わっている場合
                         start = int(rangelimit[:-1])
-                        return (span[0]+start,span[1])
+                        return (span[0]+start, span[1])
                     elif rangelimit[0] == ':':
                         end = int(rangelimit[1:])
-                        return (span[0],span[1]+end)
+                        return (span[0], span[1]+end)
                     else:
-                        start,end = map(int,rangelimit.split(':'))
-                        return (span[0]+start,span[1]+end)
+                        start, end = map(int, rangelimit.split(':'))
+                        return (span[0]+start, span[1]+end)
             return span
 
         def search_successive_matches(timex_matches):
@@ -63,79 +77,109 @@ class ApplyRule(object):
                         suc_matches.append(matches+[next_match])
             return suc_matches
 
+        def check_poslimit_restriction(rms, rules):
+            if any(rules[rm.rule_id].get('poslimit','') == 'TAIL' for rm in rms[:-1]):
+                return False
+            if len(rms) != 1 \
+                and any(rules[rm.rule_id].get('poslimit','') == 'SINGLE' for rm in rms):
+                return False
+            return True
+
+        def check_timex_type_restriction(rms, rules):
+            if timex.TYPE == TimexType.DURATION \
+                and any(rules[rm.rule_id].get('type', TimexType.DURATION) 
+                        not in (TimexType.DURATION, TimeClass.MOD, TimeClass.FUN, TimeClass.NUM) for rm in rms):
+                return False
+            if timex.TYPE == TimexType.DATE \
+                and all(rules[rm.rule_id].get('type', timex.TYPE) != timex.TYPE for rm in rms):
+                return False
+            return True
+
 
         # Matching all rules
         matches = []
-        for rule_id,rule in enumerate(self.rules):
+        for rule_id, rule in enumerate(self.rules):
             repattern = rule[u"repattern"]
             for matchObj in re.finditer(repattern, masked_sent):
                 begin_strid, end_strid = arrange_span(matchObj.span(), rule) # rangelimitに対応
-                matches.append(Match(   begin_strid=begin_strid, 
-                                        end_strid=end_strid, 
-                                        rule_id=rule_id, 
-                                        obj=matchObj))
+                matches.append(
+                    RuleMatch(begin_strid=begin_strid, 
+                              end_strid=end_strid, 
+                              rule_id=rule_id, 
+                              matchobj=matchObj))
 
-        # 時間表現に対してルールマッチング
-        best_matches = []
+        # 対象となる各時間表現に該当するルールを探索
+        rms_list = []
         for timex in timexes:
-            timex_matches = [m for m in matches \
-                                if set(range(timex.begin_strid, timex.end_strid)) >= \
-                                        set(range(m.begin_strid, m.end_strid))]
-            if not timex_matches:
-                best_matches.append([])
+            # List up candidate RuleMatch
+            cand_rms = []
+            for rm in matches:
+                if set(range(timex.begin_strid, timex.end_strid)) \
+                    >= set(range(rm.begin_strid, rm.end_strid)):
+                    cand_rms.append(rm)
+            if not cand_rms:
+                rms_list.append([])
                 continue
-            timex_matches = search_successive_matches(timex_matches)
+
+            # Merge RuleMatches
+            cand_rms_list = search_successive_matches(cand_rms)
+
             # position filtering
-            timex_matches = [ms for ms in timex_matches \
-                    if all(self.rules[m.rule_id].get('poslimit','') != 'TAIL' for m in ms[:-1])]
-            timex_matches = [ms for ms in timex_matches \
-                    if all(self.rules[m.rule_id].get('poslimit','') != 'SINGLE' for m in ms) or len(ms) == 1]
-            if timex.TYPE == 'DURATION':
-                timex_matches = [ms for ms in timex_matches \
-                    if all(self.rules[m.rule_id].get('type','DURATION') in ('DURATION','MOD','FUN','NUM') for m in ms)]
-            elif timex.TYPE == 'DATE':
-                timex_matches = [ms for ms in timex_matches \
-                    if any(self.rules[m.rule_id].get('type',timex.TYPE) == timex.TYPE for m in ms)]
-            # match num filtering
-            match_lens = [x[-1].end_strid-x[0].begin_strid for x in timex_matches]
-            timex_matches = [timex_matches[i] for i,x in enumerate(match_lens) \
-                                    if x==max(match_lens)]
-            if timex_matches:
-                best_matches.append(sorted(timex_matches, key=lambda x:len(x))[0])
+            for i, rms in list(enumerate(cand_rms_list))[::-1]:
+                if not (check_poslimit_restriction(rms, self.rules) \
+                    or check_timex_type_restriction(rms, self.rules)):
+                    cand_rms_list.pop(i)
+
+            # Use the max length RuleMatches
+            if not cand_rms_list:
+                rms_list.append([])
             else:
-                best_matches.append([])
+                match_lens = [x[-1].end_strid-x[0].begin_strid for x in cand_rms_list]
+                cand_rms_list = [cand_rms_list[i] for i,x in enumerate(match_lens) \
+                                 if x==max(match_lens)]
+                rms_list.append(sorted(cand_rms_list, key=lambda x:len(x))[0])
+
         if self.debug:
-            print(best_matches)
-        return best_matches
+            print(rms_list)
+        return rms_list
 
 
-    def get_time_compositions(self, doc, dct=None):
-        time_manager = TimeCompositionManager(dct, self.debug)
-        for sent_id, (sentence,timexes) in enumerate(doc):
-            masked_sent = self.__mask_sent(sentence, timexes) # Masking
+    def get_time_compositions(self, doc):
+        """ Convert given timexes into list of TimeComposition.
+
+        Returns:
+            List[TimeComposition]
+        """
+        time_compositions = []
+
+        for sent_id, (sentence, timexes) in enumerate(doc):
+            masked_sent = self.mask_sent(sentence, timexes) # Masking
             if self.debug:
                 print(sentence)
                 print(masked_sent)
 
             # Make TimeComposition objects
-            for i,matches in enumerate(self.__matching_rule(masked_sent, timexes)):
-                timex = timexes[i]
-                time_manager.make_new_composition(timex.TYPE, sent_id, timex.begin_strid, timex.end_strid)
-
+            for i, matches in enumerate(self.matching_rule(masked_sent, timexes)):
                 # 検出したがルールにマッチしない場合 
                 if not matches:
                     continue
 
-                # match --> TimeComposition
+                timex = timexes[i]
+                timecomp = TimeComposition(TYPE=timex.TYPE,
+                                           sent_id=sent_id,
+                                           begin_strid=timex.begin_strid,
+                                           end_strid=timex.end_strid)
+
+                # RuleMatch --> TimeComposition
                 for match in matches:
                     for dt in self.rules[match.rule_id]['datetypelist']:
                         tc = dt['timeclass']
                         if tc == 'MOD':
                             continue
-                            
+
                         val = ''
                         if 'num' in dt: # 数値の検出
-                            num_span = match.obj.span(dt['num'])
+                            num_span = match.matchobj.span(dt['num'])
                             num_str = sentence[num_span[0]:num_span[1]]
                             masked_num_str = masked_sent[num_span[0]:num_span[1]]
                             if '&' in masked_num_str:
@@ -143,12 +187,12 @@ class ApplyRule(object):
                                     val = 'X'
                                 elif masked_num_str.split('&')[0] == '#'*len(masked_num_str.split('&')[0]):  # 十数年 "#&"
                                     val = str2num(num_str[:masked_num_str.find('&')])[:-1]+'X'
-                            else: 
+                            else:
                                 val = str2num(num_str)
                         if 'gengo' in dt and (val or 'norm' in dt): # 元号の処理
                             if 'norm' in dt:
                                 val = dt['norm']
-                            gengo_span = match.obj.span(dt['gengo'])
+                            gengo_span = match.matchobj.span(dt['gengo'])
                             gengo = sentence[gengo_span[0]:gengo_span[1]]
                             for gd in self.gengo_dicts:
                                 if gd['pattern'] == gengo:
@@ -164,66 +208,87 @@ class ApplyRule(object):
                                     break
 
                         # マッチしたルール情報をTimeCompositionに加える
-                        if tc in ('PHRASE','JUN', 'SEASON', 'YOUBI'):
-                            time_manager.add(tc, dt['norm'])
-                        elif tc == 'YEARX':
-                            time_manager.add(tc, val[:-1]+'X')
-                        elif tc == 'FUN':
-                            if 'fixnum' in dt:
-                                if timex.TYPE in ('DURATION', 'SET'): 
-                                    if time_manager.get_last_cp().get_last_tcobj().value.isdigit(): # 1時間半 --> PT1.5H
-                                        prev_obj = time_manager.get_last_cp().get_last_tcobj()
-                                        val = str(int(prev_obj.value) + float(dt['fixnum']))
-                                        time_manager.add(prev_obj.tc, val, prev_obj.ref, prev_obj.relation)
+                        if tc in (TimeClass.PHRASE, TimeClass.JUN,
+                                  TimeClass.SEASON, TimeClass.YOUBI):
+                            timecomp.add(
+                                TimeData(timeclass=tc, value=dt['norm']))
+                        elif tc == TimeClass.YEARX:
+                            timecomp.add(
+                                TimeData(timeclass=tc, value=val[:-1]+'X'))
+                        elif tc == TimeClass.FUN:
+                            if 'fixnum' in dt: # 「半」
+                                if timex.TYPE in (TimexType.DURATION, TimexType.SET):
+                                    if timecomp.get_finest_timedata().value.isdigit(): # 1時間半 --> PT1.5H
+                                        prev_timedata = timecomp.get_finest_timedata()
+                                        val = str(int(prev_timedata.value) + float(dt['fixnum']))
+                                        timecomp.add(
+                                            TimeData(timeclass=prev_timedata.timeclass,
+                                                     value=val,
+                                                     ref=prev_timedata.ref,
+                                                     rel=prev_timedata.rel))
                                     else: # 半年間
                                         val = dt['fixnum']
-                                        time_manager.add(tc, val)
-                                elif timex.TYPE == 'TIME' and dt['fixnum'] == '0.5':
+                                        timecomp.add(
+                                            TimeData(timeclass=tc, value=val))
+                                elif timex.TYPE == TimexType.TIME and dt['fixnum'] == '0.5':
                                     # 1時半 --> XXXX-XX-XXT01:30
-                                    if time_manager.get_last_cp().get_last_tcobj().tc =='HOUR':
-                                        time_manager.add('MINUTE', '30')
-                                    elif time_manager.get_last_cp().get_last_tcobj().tc =='MINUTE':
-                                        time_manager.add('SECOND', '30')
+                                    if timecomp.get_finest_timedata().timeclass == TimeClass.HOUR:
+                                        timecomp.add(
+                                            TimeData(timeclass=TimeClass.MINUTE, value="30"))
+                                    elif timecomp.get_finest_timedata().timeclass == TimeClass.MINUTE:
+                                        timecomp.add(
+                                            TimeData(timeclass=TimeClass.SECOND, value="30"))
                             if 'fixnum' not in dt:
-                                if 'DCTrelation' in dt: # N年前とか
-                                    time_manager.add(tc, None, ref='DCT', relation=dt['DCTrelation'])
+                                if 'DCTrelation' in dt:
+                                    timecomp.add(
+                                        TimeData(timeclass=tc, value="1",
+                                                 rel=dt['DCTrelation']))
                                 elif 'relation' in dt:
-                                    time_manager.add(tc, None, ref='REF', relation=dt['relation'])
+                                    timecomp.add(
+                                        TimeData(timeclass=tc, value="1",
+                                                 ref=RefType.REF, rel=dt['relation']))
                         else:
-                            if timex.TYPE in ('DURATION', 'SET'):  # default値も使用「年間」--> P1Y
-                                if 'norm' in dt and not val:
-                                    val = dt['norm']
-                                if val == '':
-                                    val = '1'
-                                time_manager.add(tc, val)
-                            elif timex.TYPE in ('DATE', 'TIME'):
-                                if 'DCTrelation' in dt: # 昨年
-                                    time_manager.add(tc, '1', ref='DCT', relation=dt['DCTrelation'])
+                            if timex.TYPE in (TimexType.DURATION, TimexType.SET):
+                                # default値も使用「年間」--> P1Y
+                                val = dt['norm'] if ('norm' in dt and not val) \
+                                    else val if val else "1"
+                                timecomp.add(
+                                    TimeData(timeclass=tc, value=val))
+                            elif timex.TYPE in (TimexType.DATE, TimexType.TIME):
+                                if 'DCTrelation' in dt: # 「昨年」「来年」
+                                    timecomp.add(
+                                        TimeData(timeclass=tc, value="1",
+                                                 ref=RefType.DCT, rel=dt['DCTrelation']))
                                 elif 'relation' in dt:
-                                    time_manager.add(tc, '1', ref='REF', relation=dt['relation'])
-                                elif tc == 'HOUR' and time_manager.get_last_cp().get_tcobj(tc).value in ('AF','NI'):
+                                    timecomp.add(
+                                        TimeData(timeclass=tc, value="1",
+                                                 ref=RefType.REF, rel=dt['relation']))
+                                elif tc == TimeClass.HOUR \
+                                    and timecomp.get_timedata(tc).value in ('AF','NI'):
                                     val = str(12+int(val))
-                                    time_manager.add(tc, val)
-                                elif 'norm' in dt and not tc.startswith('GYEAR'): # except "元年"
-                                    if dt['norm'] == 'AF' and tc == 'HOUR' and val.isdigit(): # 午後X時
+                                    timecomp.add(
+                                        TimeData(timeclass=tc, value=val))
+                                elif 'norm' in dt and not re.match("GYEARX?", tc): # except "元年"
+                                    if dt['norm'] == 'AF' and tc == TimeClass.HOUR and val.isdigit(): # 午後X時
                                         val = str(12+int(val))
-                                        time_manager.add(tc, val)
-                                    elif dt['norm'] == 'MO' and tc == 'HOUR' and val.isdigit(): # 午前X時
-                                        time_manager.add(tc, val)
+                                        timecomp.add(
+                                            TimeData(timeclass=tc, value=val))
+                                    elif dt['norm'] == 'MO' and tc == TimeClass.HOUR and val.isdigit(): # 午前X時
+                                        timecomp.add(
+                                            TimeData(timeclass=tc, value=val))
                                     else:
-                                        time_manager.add(tc, dt['norm'])
+                                        timecomp.add(
+                                            TimeData(timeclass=tc, value=dt['norm']))
                                 elif val != '':
-                                    time_manager.add(tc, val)
-                if self.debug:
-                    print(time_manager.time_compositions[-1].timedict)
+                                    timecomp.add(
+                                        TimeData(timeclass=tc, value=val))
+                time_compositions.append(timecomp)
 
-        time_manager.resolve_parallel() # NUMの解消
-        time_manager.resolve_functions() # fixnum=0.5の解消, 半年/半日など
-        return time_manager
+        return time_compositions
 
 
 
-    def __mask_sent(self, sentence, timexes):
+    def mask_sent(self, sentence, timexes):
         masked_sent = sentence
         for timex in timexes:
             for i in range(timex.begin_strid, timex.end_strid):
@@ -237,8 +302,7 @@ class ApplyRule(object):
             timex_text = sentence[timex.begin_strid:timex.end_strid]
             for gengo in [x['pattern'] for x in self.gengo_dicts]:
                 if gengo in timex_text:
-                    for i in range(timex.begin_strid+timex_text.index(gengo), 
-                                    timex.begin_strid+timex_text.index(gengo)+len(gengo)):
+                    for i in range(timex.begin_strid+timex_text.index(gengo),
+                                   timex.begin_strid+timex_text.index(gengo)+len(gengo)):
                         masked_sent = f'{masked_sent[:i]}%{masked_sent[i+1:]}'
         return masked_sent
-
