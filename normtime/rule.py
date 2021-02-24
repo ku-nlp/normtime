@@ -160,15 +160,16 @@ class ApplyRule(object):
 
             # Make TimeComposition objects
             for i, matches in enumerate(self.matching_rule(masked_sent, timexes)):
-                # 検出したがルールにマッチしない場合 
-                if not matches:
-                    continue
-
                 timex = timexes[i]
                 timecomp = TimeComposition(TYPE=timex.TYPE,
                                            sent_id=sent_id,
                                            begin_strid=timex.begin_strid,
                                            end_strid=timex.end_strid)
+
+                # 検出したがルールにマッチしない場合 
+                if not matches:
+                    time_compositions.append(timecomp)
+                    continue
 
                 # RuleMatch --> TimeComposition
                 for match in matches:

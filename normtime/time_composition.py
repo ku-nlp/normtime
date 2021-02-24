@@ -86,7 +86,10 @@ def calc_vfs(time_compositions):
                 for td in cp.timedict.values():
                     if td.timeclass in [TimeClass.FUN, TimeClass.MOD]:
                         continue
-                    vfs += td.value+td.timeclass[0]
+                    if td.timeclass in (TimeClass.HOUR, TimeClass.MINUTE, TimeClass.SECOND):
+                        vfs += 'T'+td.value+td.timeclass[0]
+                    else:
+                        vfs += td.value+td.timeclass[0]
                 vfs_list[cpid] = vfs
                 continue
 
@@ -170,7 +173,7 @@ def calc_vfs(time_compositions):
                     vfs += 'T'
                     Flag = False
                 if tc not in used_tcs and td.value:
-                    if tc == TimeClass.NUM:
+                    if tc in (TimeClass.NUM, TimeClass.FUN):
                         continue
                     if tc == TimeClass.FYEAR:
                         vfs += f'{td.value}FY'
@@ -508,10 +511,10 @@ def find_refs(cpid, time_compositions, v_list, dct):
 
 
 def resolve_youbi(time_compositions, v_list, cpid, v=None, ref2cp=None, slots=None):
-    """ Merge successive date and youbi.
+    """ Complement successive date and youbi information.
 
     Returns:
-        Tuple[bool, List[str]]
+        Tuple[bool, List[str]]: Changed flag and updated v_list.
     """
     cp = time_compositions[cpid]
     next_cp = None if cpid+1 == len(time_compositions) \
