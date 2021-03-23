@@ -12,6 +12,7 @@ class TimeData:
     value: str
     ref: str = ""
     rel: str = None # One of: -1, 0, 1, None
+    timetype: str = ""
 
 
 
@@ -79,7 +80,8 @@ def calc_vfs(time_compositions):
 
         if cp.TYPE in (TimexType.DATE, TimexType.TIME):
             # 2年前 → Q-2Y
-            if any(td.timeclass==TimeClass.FUN for td in cp.timedict.values()):
+            if len(cp.timedict) > 1 and TimeClass.FUN in cp.timedict \
+                and list(cp.timedict.values())[-2].timetype != "DATE":
                 vfs = 'Q+' if cp.get_timedata('FUN').rel == 1 \
                         else 'Q-' if cp.get_timedata('FUN').rel == -1 \
                         else 'Q'
@@ -277,7 +279,9 @@ def calc_value(time_compositions, vfs_list, dct):
         ref2cp = find_refs(cpid, time_compositions, v_list, dct)
 
         # 「N年前」の正規化
-        if len(cp.timedict) > 1 and TimeClass.FUN in cp.timedict:
+        # 「お盆前」などは対象外
+        if len(cp.timedict) > 1 and TimeClass.FUN in cp.timedict \
+            and list(cp.timedict.values())[-2].timetype != "DATE":
             val = ''
             ref_cp = get_ref_cp(ref2cp)[0]
             rel = cp.get_timedata('FUN').rel if cp.get_timedata('FUN').rel else 0

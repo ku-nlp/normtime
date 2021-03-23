@@ -173,7 +173,8 @@ class ApplyRule(object):
 
                 # RuleMatch --> TimeComposition
                 for match in matches:
-                    for dt in self.rules[match.rule_id]['datetypelist']:
+                    rule = self.rules[match.rule_id]
+                    for dt in rule['datetypelist']:
                         tc = dt['timeclass']
                         if tc == 'MOD':
                             continue
@@ -212,10 +213,12 @@ class ApplyRule(object):
                         if tc in (TimeClass.PHRASE, TimeClass.JUN,
                                   TimeClass.SEASON, TimeClass.YOUBI):
                             timecomp.add(
-                                TimeData(timeclass=tc, value=dt['norm']))
+                                TimeData(timeclass=tc, value=dt['norm'],
+                                         timetype=rule.get('type', '')))
                         elif tc == TimeClass.YEARX:
                             timecomp.add(
-                                TimeData(timeclass=tc, value=val[:-1]+'X'))
+                                TimeData(timeclass=tc, value=val[:-1]+'X',
+                                         timetype=rule.get('type', '')))
                         elif tc == TimeClass.FUN:
                             if 'fixnum' in dt: # 「半」
                                 if timex.TYPE in (TimexType.DURATION, TimexType.SET):
@@ -226,63 +229,78 @@ class ApplyRule(object):
                                             TimeData(timeclass=prev_timedata.timeclass,
                                                      value=val,
                                                      ref=prev_timedata.ref,
-                                                     rel=prev_timedata.rel))
+                                                     rel=prev_timedata.rel,
+                                                     timetype=rule.get('type', '')))
                                     else: # 半年間
                                         val = dt['fixnum']
                                         timecomp.add(
-                                            TimeData(timeclass=tc, value=val))
+                                            TimeData(timeclass=tc, value=val,
+                                                     timetype=rule.get('type', '')))
                                 elif timex.TYPE == TimexType.TIME and dt['fixnum'] == '0.5':
                                     # 1時半 --> XXXX-XX-XXT01:30
                                     if timecomp.get_finest_timedata().timeclass == TimeClass.HOUR:
                                         timecomp.add(
-                                            TimeData(timeclass=TimeClass.MINUTE, value="30"))
+                                            TimeData(timeclass=TimeClass.MINUTE,
+                                                     value="30",
+                                                     timetype=rule.get('type', '')))
                                     elif timecomp.get_finest_timedata().timeclass == TimeClass.MINUTE:
                                         timecomp.add(
-                                            TimeData(timeclass=TimeClass.SECOND, value="30"))
+                                            TimeData(timeclass=TimeClass.SECOND,
+                                                     value="30",
+                                                     timetype=rule.get('type', '')))
                             if 'fixnum' not in dt:
                                 if 'DCTrelation' in dt:
                                     timecomp.add(
                                         TimeData(timeclass=tc, value="1",
-                                                 rel=dt['DCTrelation']))
+                                                 rel=dt['DCTrelation'],
+                                                 timetype=rule.get('type', '')))
                                 elif 'relation' in dt:
                                     timecomp.add(
                                         TimeData(timeclass=tc, value="1",
-                                                 ref=RefType.REF, rel=dt['relation']))
+                                                 ref=RefType.REF, rel=dt['relation'],
+                                                 timetype=rule.get('type', '')))
                         else:
                             if timex.TYPE in (TimexType.DURATION, TimexType.SET):
                                 # default値も使用「年間」--> P1Y
                                 val = dt['norm'] if ('norm' in dt and not val) \
                                     else val if val else "1"
                                 timecomp.add(
-                                    TimeData(timeclass=tc, value=val))
+                                    TimeData(timeclass=tc, value=val, timetype=rule.get('type', '')))
                             elif timex.TYPE in (TimexType.DATE, TimexType.TIME):
                                 if 'DCTrelation' in dt: # 「昨年」「来年」
                                     timecomp.add(
                                         TimeData(timeclass=tc, value="1",
-                                                 ref=RefType.DCT, rel=dt['DCTrelation']))
+                                                 ref=RefType.DCT, rel=dt['DCTrelation'],
+                                                 timetype=rule.get('type', '')))
                                 elif 'relation' in dt:
                                     timecomp.add(
                                         TimeData(timeclass=tc, value="1",
-                                                 ref=RefType.REF, rel=dt['relation']))
+                                                 ref=RefType.REF, rel=dt['relation'],
+                                                 timetype=rule.get('type', '')))
                                 elif tc == TimeClass.HOUR \
                                     and timecomp.get_timedata(tc).value in ('AF','NI'):
                                     val = str(12+int(val))
                                     timecomp.add(
-                                        TimeData(timeclass=tc, value=val))
+                                        TimeData(timeclass=tc, value=val,
+                                                 timetype=rule.get('type', '')))
                                 elif 'norm' in dt and not re.match("GYEARX?", tc): # except "元年"
                                     if dt['norm'] == 'AF' and tc == TimeClass.HOUR and val.isdigit(): # 午後X時
                                         val = str(12+int(val))
                                         timecomp.add(
-                                            TimeData(timeclass=tc, value=val))
+                                            TimeData(timeclass=tc, value=val,
+                                                     timetype=rule.get('type', '')))
                                     elif dt['norm'] == 'MO' and tc == TimeClass.HOUR and val.isdigit(): # 午前X時
                                         timecomp.add(
-                                            TimeData(timeclass=tc, value=val))
+                                            TimeData(timeclass=tc, value=val,
+                                                     timetype=rule.get('type', '')))
                                     else:
                                         timecomp.add(
-                                            TimeData(timeclass=tc, value=dt['norm']))
+                                            TimeData(timeclass=tc, value=dt['norm'],
+                                                     timetype=rule.get('type', '')))
                                 elif val != '':
                                     timecomp.add(
-                                        TimeData(timeclass=tc, value=val))
+                                        TimeData(timeclass=tc, value=val,
+                                                 timetype=rule.get('type', '')))
                 time_compositions.append(timecomp)
 
         return time_compositions
